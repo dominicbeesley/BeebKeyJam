@@ -7,16 +7,33 @@
 #include "keymap.h"
 
 #define PIO_RX_PIN 28
-#define GPIO_RELAY_PIN 21
-#define GPIO_RST_PIN 22
 
-#define GPIO_CA2_OUT_PIN 16
-#define GPIO_CA2_IN_PIN 19
-#define GPIO_KB_EN_PIN 17
-#define GPIO_1MHZ_PIN 18
+#define GPIO_RELAY_PIN      17
+#define GPIO_RST_PIN        15
 
-#define GPIO_PA7_OUT_PIN 7
-#define GPIO_PA7_IN_PIN 20
+#define GPIO_CA2_OUT_PIN    16
+#define GPIO_CA2_IN_PIN     4
+#define GPIO_KB_EN_PIN      13
+#define GPIO_1MHZ_PIN       14
+
+#define GPIO_PA7_OUT_PIN    22
+#define GPIO_PA7_IN_PIN     28
+
+#define GPIO_PA3_IN_PIN     6
+#define GPIO_PA4_IN_PIN     12
+#define GPIO_PA5_IN_PIN     11
+#define GPIO_PA6_IN_PIN     10
+#define GPIO_PA0_IN_PIN     9
+#define GPIO_PA1_IN_PIN     8
+#define GPIO_PA2_IN_PIN     7
+
+
+//unused so far
+#define GPIO_LED1_PIN       3
+#define GPIO_LED2_PIN       2
+#define GPIO_LED3_PIN       5
+
+
 
 #define SERIAL_BAUD (16000000/13/8/8)
 #define KEYTIME 21000
@@ -58,13 +75,13 @@ void scancore(void) {
                 col_ix++;
                 col_ix = col_ix & 0x0F;
             } else {
-                col_ix = (gpio_get(3)?1:0) |
-                         (gpio_get(4)?2:0) |
-                         (gpio_get(5)?4:0) |
-                         (gpio_get(6)?8:0);
-                row_ix = (gpio_get(0)?1:0) |
-                         (gpio_get(1)?2:0) |
-                         (gpio_get(2)?4:0);
+                col_ix = (gpio_get(GPIO_PA0_IN_PIN)?1:0) |
+                         (gpio_get(GPIO_PA1_IN_PIN)?2:0) |
+                         (gpio_get(GPIO_PA2_IN_PIN)?4:0) |
+                         (gpio_get(GPIO_PA3_IN_PIN)?8:0);                
+                row_ix = (gpio_get(GPIO_PA4_IN_PIN)?1:0) |
+                         (gpio_get(GPIO_PA5_IN_PIN)?2:0) |
+                         (gpio_get(GPIO_PA6_IN_PIN)?4:0);
             }           
 
             //do CA2
