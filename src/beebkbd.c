@@ -35,6 +35,8 @@ Note: this build does no keyboard jamming but DOES:
 
 #define PIO_RX_PIN 28
 
+#define GPIO_LED_PIN        25
+
 #define GPIO_RELAY_PIN      17
 #define GPIO_RST_PIN        15
 
@@ -66,14 +68,19 @@ Note: this build does no keyboard jamming but DOES:
 #define KEYTIME 21000
 
 
-
 // bit map of keys pressed, index is row (in beeb bit order!), bit # is column
 // a '1' indicates key is pressed                          
 volatile unsigned int keymatrix[8];
 volatile unsigned char tx_char;     // set in scancore
+
 volatile bool txf_part;             // set in scancore
 volatile bool txf;                  // set in scancore
-volatile bool txf_ack;              // set in 
+volatile bool txf_ack;              // set in key_task
+
+volatile unsigned char rx_char;     // set in key_task
+volatile bool rxf;                  // set in key_task
+volatile bool rxf_ack;              // set in scancore
+
 
 void scancore(void) {
     static unsigned char prev_col_ix = 0;
@@ -118,6 +125,20 @@ void scancore(void) {
                     txf_part = false;
                 }
 
+                if (prev_col_ix == 0xE && col_ix != 0xE) {
+                    rxf_ack = rxf;
+                }
+
+                if (col_ix == 0xE) {
+                    pa7_o = rx_char & (1 << row_ix);                          
+                } else if (col_ix == 0xF) {
+                    if (row_ix == 7) 
+                        pa7_o = rxf != rxf_ack;
+                    else if (row_ix == 6)
+                        pa7_o = txf == txf_ack;
+                    else
+                        pa7_o = false;
+                }
 
                 prev_col_ix = col_ix;
             }           
@@ -137,37 +158,24 @@ void scancore(void) {
         gpio_put(GPIO_CA2_OUT_PIN, ca2_o || gpio_get(GPIO_CA2_IN_PIN));
         gpio_put(GPIO_PA7_OUT_PIN, pa7_o || gpio_get(GPIO_PA7_IN_PIN));
 
+        gpio_put(GPIO_LED_PIN, !(rxf_ack != rxf));
+
     }
 }
-
-
- // Set up the state machine we're going to use to receive .
-    PIO pio = pio0;
-    uint sm = 0;
-
-void serialrx_task()
-{
-/*    if (!uart_rx_program_empty(pio,sm))
-        { 
-            char c = uart_rx_program_getc(pio, sm) ^ 255;
-            // remap return data e.g. £ ( 0x60)
-            if (c==0x60)
-                {
-                    putchar(0xC2);putchar(0xa2);return;
-                }
-            putchar(c);
-        }
-        */
-    return;
-}
-
-
 
 void key_task()
 {
     if (txf != txf_ack) {
         putchar_raw(tx_char);
         txf_ack = txf;
+    }
+
+    if (rxf == rxf_ack) {
+        int x = getchar_timeout_us(0);
+        if (x != PICO_ERROR_TIMEOUT) {
+            rx_char = (unsigned char)x;
+            rxf = !rxf_ack;            
+        }
     }
 }
 
@@ -206,6 +214,9 @@ int main()
 
     gpio_init(GPIO_PA7_OUT_PIN);
 
+    gpio_init(GPIO_LED_PIN);
+    gpio_set_dir(GPIO_LED_PIN,0);
+
     //PA4-6, PA0-3
     for (int i = 0; i <= 6; i++) {
         gpio_init(i);
@@ -214,9 +225,6 @@ int main()
 
     multicore_launch_core1(scancore);
 
- // Set up the state machine we're going to use to receive .
-    uint offset = pio_add_program(pio, &uart_rx_program);
-    uart_rx_program_init(pio, sm, offset, PIO_RX_PIN, SERIAL_BAUD);
 
     puts("init...");
 
@@ -224,110 +232,12 @@ int main()
     txf = false;
     txf_ack = false;
 
+    rxf = false;
+    rxf_ack = false;
 
-
-/*
-// test program for finding keycodes 
-    while ( 1) {
-        int c = getchar_timeout_us(100);
-        if (c != PICO_ERROR_TIMEOUT)
-            printf(" %x ",c&0xFF);
-
-    }
-*/
-
-// test program to check rx uart ( inverted )
     while (true) {
-        // Echo characters received from PIO to the console
-        //serialrx_task();
         key_task();   
     }
 
     return 0;
 }
-/* Keyboard 
-
-putty default
-PC   BBC
-F10  R0
-F12  break
-end  COPY
-
-CTRL+HOME 
-
-
-1a break ( Ctrl Z )
-
-1b 1a alt break
-
-1b escape
-
-1b 5b 41 up
-1b 5b 42 down
-1b 5b 43 right
-1b 5b 44 left
-
-1b 5b 31 7e home
-1b 5b 32 7e insert
-1b 5b 33 7e Delete
-1b 5b 34 7e end
-1b 5b 35 7e pgup
-1b 5b 36 7e pgdown
-
-1b 5b 31 31 7e  F1
-1b 5b 31 32 7e  F2
-
-1b 5b 31 37 7e  F6
-
-1b 5b 31 39 7e  F8
-1b 5b 32 30 7e  F9
-1b 5b 32 31 7e  F10
-1b 5b 32 33 7e  F11
-
-
-1b 5b 32 33 7e Shift F1
-1b 5b 32 39 7e Shift F6
-
-1b 1b 5b 31 31 7e  Alt F1
-1b 1b 5b 31 32 7e  ALt F2
-
-
-SCO
-
-1b 5b 4d   F1
-1b 5b 4e
-
-1b 5b 59 shift F1
-
-1b 5b 6b CTRL F1
-
-1b 5b 77 SHIFT+CTRL F1 
-
-1b 5b 41 up
-1b 5b 42 down
-1b 5b 43 right
-1b 5b 44 left
-1b 5b 46 end
-1b 5b 47 page down
-1b 5b 48 home
-1b 5b 49 page up
-1b 5b 4c insert
-
-1b 5b 5a shift tab
-
-
-1b 4f 41 CTRL  up
-1b 4f 42 CTRL down
-1b 4f 43 CTRL right
-1b 4f 44 CTRL left
-
-numeric keypad
-( application mode)
-
-1b 4f 70 0
-1b 4f 71 1
-
-
-*/
-
-
