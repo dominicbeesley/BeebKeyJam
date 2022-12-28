@@ -106,6 +106,9 @@ void scancore(void) {
                 //keyboard scan enabled, run through the columns
                 col_ix++;
                 col_ix = col_ix & 0x0F;
+
+                prev_col_ix = -1;
+
             } else {
                 col_ix = (gpio_get(GPIO_PA0_IN_PIN)?1:0) |
                          (gpio_get(GPIO_PA1_IN_PIN)?2:0) |
