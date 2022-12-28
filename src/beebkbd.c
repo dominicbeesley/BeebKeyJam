@@ -110,7 +110,7 @@ void scancore(void) {
 
                 if (prev_col_ix == 0xC && col_ix == 0xD) {
                     txf_part = true;
-                    tx_char = (unsigned char)((tx_char << 3) | row_ix);
+                    tx_char = (unsigned char)((tx_char >> 3) | (row_ix << 5));
                 }
 
                 if (txf_part && col_ix == 0xF) {
