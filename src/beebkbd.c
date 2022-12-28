@@ -6,6 +6,33 @@
 #include "uart_rx.pio.h"
 #include "keymap.h"
 
+/*
+
+    __  __           __  ___________                __      __
+   / / / /___  _____/ /_/ ____/ ___/   ____  ____  / /_  __/ /
+  / /_/ / __ \/ ___/ __/ /_   \__ \   / __ \/ __ \/ / / / / /
+ / __  / /_/ (__  ) /_/ __/  ___/ /  / /_/ / / / / / /_/ /_/
+/_/ /_/\____/____/\__/_/    /____/   \____/_/ /_/_/\__, (_)
+                                                  /____/
+
+This version passes USB-serial data to / from the host via hidden keyboard columns
+Column F: Status: Bit 7 - RXF - char pending, Bit 6 - TXE - can transmit
+Column E: RXD pending receive byte, cleared after column E deselected
+Column C,D: TXD (see below)
+
+
+Data is sent from BBC to host by:
+
+bit 2..0 of the row address are shifted into a transmit register each time
+column transitions C->D, data is transmitted when Column F is next selected
+
+Note: this build does no keyboard jamming but DOES:
+ - passes CA2 through from keyboard only when column <=9 or keyboard not "enabled"
+ - passed through PA7 for columns <= 9
+
+*/
+
+
 #define PIO_RX_PIN 28
 
 #define GPIO_RELAY_PIN      17
@@ -40,18 +67,16 @@
 
 
 
-// Serial string to to enable serial redirect on Beeb
-
-char serialstring[] = {13,/*'*','F','X','1','5','6',',','0',',','2','5','2',13,*/ 
-                          '*','F','X','8',',','8',13, 
-                          '*','F','X','3',',','1',13,'\0'};
-
-
 // bit map of keys pressed, index is row (in beeb bit order!), bit # is column
 // a '1' indicates key is pressed                          
 volatile unsigned int keymatrix[8];
+volatile unsigned char tx_char;     // set in scancore
+volatile bool txf_part;             // set in scancore
+volatile bool txf;                  // set in scancore
+volatile bool txf_ack;              // set in 
 
 void scancore(void) {
+    static unsigned char prev_col_ix = 0;
     static unsigned char col_ix = 0;
     static unsigned char row_ix = 0;
     static unsigned char col_load;
@@ -82,21 +107,35 @@ void scancore(void) {
                 row_ix = (gpio_get(GPIO_PA4_IN_PIN)?1:0) |
                          (gpio_get(GPIO_PA5_IN_PIN)?2:0) |
                          (gpio_get(GPIO_PA6_IN_PIN)?4:0);
+
+                if (prev_col_ix == 0xC && col_ix == 0xD) {
+                    txf_part = true;
+                    tx_char = (unsigned char)((tx_char << 3) | row_ix);
+                }
+
+                if (txf_part && col_ix == 0xF) {
+                    txf = !txf_ack;
+                    txf_part = false;
+                }
+
+
+                prev_col_ix = col_ix;
             }           
 
-            //do CA2
-            ca2_o = 0;
-            for (int i = 0; i < 8; i++) {
-                ca2_o |= (keymatrix[i] & (1 << col_ix));
+            if (col_ix <= 9) {
+                //do CA2
+                ca2_o = 0;
+                for (int i = 0; i < 8; i++) {
+                    ca2_o |= (keymatrix[i] & (1 << col_ix));
+                }
+                pa7_o = keymatrix[row_ix] & (1 << col_ix);      
             }
-            pa7_o = keymatrix[row_ix] & (1 << col_ix);      
 
         }
 
 
         gpio_put(GPIO_CA2_OUT_PIN, ca2_o || gpio_get(GPIO_CA2_IN_PIN));
         gpio_put(GPIO_PA7_OUT_PIN, pa7_o || gpio_get(GPIO_PA7_IN_PIN));
-
 
     }
 }
@@ -122,188 +161,18 @@ void serialrx_task()
     return;
 }
 
-void key_clear(void) {
-    for (int i = 0; i < 8; i++) {
-        keymatrix[i] = 0;
-    }
-}
-
-void key_down(unsigned int key) {
-
-    if (key & CTRL) {
-        keymatrix[0] |= 2;
-    }
-    if (key & SHIFT) {
-        keymatrix[0] |= 1;
-    }
-
-    keymatrix[0x7 - (key & 0x7)] |= 1<<((key&0xF0) >> 4);
-}
-
-void key_up(unsigned int key) {
-    if (key & ALLUP) {
-        key_clear();
-        return;
-    }
-
-    if (key & CTRL) {
-        keymatrix[0] &= ~2;
-    }
-    if (key & SHIFT) {
-        keymatrix[0] &= ~1;
-    }
-
-    keymatrix[0x7 - (key & 0x7)] &= ~(1<<((key&0xF0) >> 4));
-}
 
 
 void key_task()
 {
-    static int state = 0;
-    static uint64_t timeout;
-    static int powerstate =0;
-    static int strptr = 0;
-
-    switch (state)
-    {        
-    case 0: { int c = getchar_timeout_us(0);
-        if (c != PICO_ERROR_TIMEOUT)
-        { 
-            if (c > 32 && c < 128) {
-                putchar(c);
-            } else {
-                printf("%%%02XX", c);
-            }
-            if ( c == 0x1b )
-            {
-                c = getchar_timeout_us(0);
-                if (c== PICO_ERROR_TIMEOUT)
-                    c = 0x1b; // ESCAPE
-                else 
-                {   
-                    puts("ESCAPE^[");
-                    unsigned int tmpkey = -1;
-                    // Alt A or Alt Z for cap/shift lock
-                    if ((c == 'A') ||( c=='a')) tmpkey = C0+R3;// CAPS lock
-                    if ((c == 'Z') ||( c=='z')) tmpkey = C0+R2;// SHIFT lock
-                      
-                    // multichar escape sequence
-                    if ( c== 0x4f)
-                    {   
-                        switch (getchar_timeout_us(0))
-                        {
-                            case 0x41: tmpkey = C9+R4;break; // Ctrl Up
-                            case 0x42: tmpkey = C9+R5;break; // Ctrl Down
-                            case 0x43: tmpkey = C9+R0;break; // Ctrl Right
-                            case 0x44: tmpkey = C9+R6;break; // CTRL Left
-                            case 0x70: tmpkey = C10+R1;break; // Num 0
-                            case 0x71: tmpkey = C11+R1;break; // Num 1
-                            case 0x72: tmpkey = C12+R0;break; // Num 2
-                            case 0x73: tmpkey = C12+R1;break; // Num 3
-                            case 0x74: tmpkey = C10+R0;break; // Num 4
-                            case 0x75: tmpkey = C11+R0;break; // Num 5
-                            case 0x76: tmpkey = C10+R6;break; // Num 6
-                            case 0x77: tmpkey = C11+R6;break; // Num 7
-                            case 0x78: tmpkey = C10+R5;break; // Num 8   
-                            case 0x79: tmpkey = C11+R5;break; // Num 9
-                        }
-                    }
-                    if ( c== 0x5b)
-                    {
-                        c = getchar_timeout_us(0);
-                        printf("===%02X===",c);
-                        if (( c>= 0x40) && ( c<= 0x7b))
-                        {
-                            tmpkey = map1[c+128-0x40];
-                        }
-                        if (tmpkey & BREAK)
-                        {
-                            gpio_put(GPIO_RST_PIN,1);                   // RST is positive!
-                            timeout = time_us_64()+(KEYTIME*10);
-                            state = 2;
-                            puts("S=2");
-                            break;
-                        }  
-                        if ( tmpkey & MAGIC)
-                        {
-
-///? ask dp11 what this is meant to do///                            // F11
-///? ask dp11 what this is meant to do///                            if (tmpkey & CTRL)
-///? ask dp11 what this is meant to do///                            {
-///? ask dp11 what this is meant to do///                                powerstate ^= 1;
-///? ask dp11 what this is meant to do///                                gpio_put(GPIO_RST_PIN,powerstate);
-///? ask dp11 what this is meant to do///                                state = 0;
-///? ask dp11 what this is meant to do///                                break;
-///? ask dp11 what this is meant to do///                            }
-
-                            state = 3; 
-                            puts("S=3");
-                            strptr = 0;
-                            break;
-                        }      
-                    }
-                    if (tmpkey != -1)
-                    {
-                        key_down(tmpkey);
-                        state = 1;
-                        puts("S=1");
-                        timeout = time_us_64()+KEYTIME;   
-                        break;
-                    }
-                }
-            } 
-            if ((c == 0xc2) && (getchar_timeout_us(0)==0xa3)) c = 0x60; // £ sign
-            if ( c <= 0x7f ) {
-                key_down(map1[c]);
-                state = 1;
-                puts("S=1");
-                timeout = time_us_64()+KEYTIME;   
-            }
-            else
-                printf(" unknown char %x %x %x",c,getchar_timeout_us(0),getchar_timeout_us(0)); 
-            }
-        break;
-        } 
-    case 1: {
-        if (time_us_64()>timeout) {
-               key_up(ALLUP);
-               state = 0;
-               puts("s=0");
-        }
-        break;
-        }
-    case 2: 
-        if (time_us_64()>timeout) {
-            gpio_put(GPIO_RST_PIN,0);
-            timeout = time_us_64()+(KEYTIME*10);
-            state = 1;
-            puts("s=1");
-        }
-        break;
-    case 3:
-        // F11 *FX string.
-        if (time_us_64()>timeout) {
-            char c = serialstring[strptr++];
-            if (!c)
-                {
-                    key_up(ALLUP);
-                    state = 0;
-                    puts("s=0");
-                    break;
-                } 
-            key_down(map1[c]);
-            timeout = time_us_64()+(KEYTIME*2);       
-        }
-        break;
-    default:
-        puts("XXX");
-        state = 0;
+    if (txf != txf_ack) {
+        putchar_raw(tx_char);
+        txf_ack = txf;
     }
 }
 
 int main()
 {
-    key_clear();
     stdio_init_all();
 
     //setup keyboard IOs
@@ -343,8 +212,6 @@ int main()
         gpio_set_pulls(i,0,1);
     }
 
-    key_down(0);
-
     multicore_launch_core1(scancore);
 
  // Set up the state machine we're going to use to receive .
@@ -352,6 +219,11 @@ int main()
     uart_rx_program_init(pio, sm, offset, PIO_RX_PIN, SERIAL_BAUD);
 
     puts("init...");
+
+    txf_part = false;
+    txf = false;
+    txf_ack = false;
+
 
 
 /*
