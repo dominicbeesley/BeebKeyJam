@@ -17,25 +17,25 @@
 
 This version passes USB-serial data to / from the host via hidden keyboard columns
 Column F: Status: Bit 7 - RXF - char pending, Bit 6 - TXE - can transmit
-Column E: RXD pending receive byte, cleared after column E deselected
+Column E: RXD pending receive byte, cleared after column E deselected to "ACK"
 Column C,D: TXD (see below)
 
 
 Data is sent from BBC to host by:
 
 bit 2..0 of the row address are shifted into a transmit register each time
-column transitions C->D, data is transmitted when Column F is next selected
+column transitions D->C, data is transmitted when "ACK" selected
 
 Note: this build does no keyboard jamming but DOES:
  - passes CA2 through from keyboard only when column <=9 or keyboard not "enabled"
  - passed through PA7 for columns <= 9
 
+"ACK" condidition is when rowix = 0, colix = A
+
 */
 
 
 #define PIO_RX_PIN 28
-
-#define GPIO_LED_PIN        25
 
 #define GPIO_RELAY_PIN      17
 #define GPIO_RST_PIN        15
@@ -118,17 +118,17 @@ void scancore(void) {
                          (gpio_get(GPIO_PA5_IN_PIN)?2:0) |
                          (gpio_get(GPIO_PA6_IN_PIN)?4:0);
 
-                if (prev_col_ix == 0xC && col_ix == 0xD) {
+                if (prev_col_ix == 0xD && col_ix == 0xC) {
                     txf_part = true;
                     tx_char = (unsigned char)((tx_char >> 3) | (row_ix << 5));
                 }
 
-                if (txf_part && col_ix == 0xF) {
+                if (txf_part && prev_col_ix == 0x0C && col_ix == 0xA && row_ix == 0x0) {
                     txf = !txf_ack;
                     txf_part = false;
                 }
 
-                if (prev_col_ix == 0xE && col_ix != 0xE) {
+                if (prev_col_ix == 0xE && col_ix == 0xA && row_ix == 0x0) {
                     rxf_ack = rxf;
                 }
 
@@ -160,9 +160,6 @@ void scancore(void) {
 
         gpio_put(GPIO_CA2_OUT_PIN, ca2_o || gpio_get(GPIO_CA2_IN_PIN));
         gpio_put(GPIO_PA7_OUT_PIN, pa7_o || gpio_get(GPIO_PA7_IN_PIN));
-
-        gpio_put(GPIO_LED_PIN, !(rxf_ack != rxf));
-
     }
 }
 
@@ -217,19 +214,20 @@ int main()
 
     gpio_init(GPIO_PA7_OUT_PIN);
 
-    gpio_init(GPIO_LED_PIN);
-    gpio_set_dir(GPIO_LED_PIN,0);
-
-    //PA4-6, PA0-3
-    for (int i = 0; i <= 6; i++) {
-        gpio_init(i);
-        gpio_set_pulls(i,0,1);
-    }
-
-    multicore_launch_core1(scancore);
-
-
-    puts("init...");
+    gpio_init(GPIO_PA3_IN_PIN);
+    gpio_set_pulls(GPIO_PA3_IN_PIN,0,1);
+    gpio_init(GPIO_PA4_IN_PIN);
+    gpio_set_pulls(GPIO_PA4_IN_PIN,0,1);
+    gpio_init(GPIO_PA5_IN_PIN);
+    gpio_set_pulls(GPIO_PA5_IN_PIN,0,1);
+    gpio_init(GPIO_PA6_IN_PIN);
+    gpio_set_pulls(GPIO_PA6_IN_PIN,0,1);
+    gpio_init(GPIO_PA0_IN_PIN);
+    gpio_set_pulls(GPIO_PA0_IN_PIN,0,1);
+    gpio_init(GPIO_PA1_IN_PIN);
+    gpio_set_pulls(GPIO_PA1_IN_PIN,0,1);
+    gpio_init(GPIO_PA2_IN_PIN);
+    gpio_set_pulls(GPIO_PA2_IN_PIN,0,1);
 
     txf_part = false;
     txf = false;
@@ -237,6 +235,8 @@ int main()
 
     rxf = false;
     rxf_ack = false;
+
+    multicore_launch_core1(scancore);
 
     while (true) {
         key_task();   

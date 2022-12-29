@@ -96,6 +96,10 @@ uart_rx_char:	php
 		ror	zp_tmp1
 
 
+		; ack received char
+		lda	#$0A
+		sta	sheila_SYSVIA_ora_nh
+
 		lda	#$0B
 		sta	sheila_SYSVIA_orb
 		lda	#0
@@ -129,27 +133,23 @@ uart_tx_char:	php
 							; output on bits 0 to 6
 		sta	sheila_SYSVIA_ddra		; 
 
-		lda	#%01100000
+		; wait for TXE
+		lda	#$6f
+		sta	sheila_SYSVIA_ora_nh
+SendWt:
+		lda	sheila_SYSVIA_ora_nh
+		bpl	SendWt
+
+		lda	#%01101000
 		lsr	zp_tmp1
 		ror	A
 		lsr	zp_tmp1
 		ror	A
 		ror	A
 		sta	sheila_SYSVIA_ora_nh
-		inc	sheila_SYSVIA_ora_nh
+		dec	sheila_SYSVIA_ora_nh
 
-		lda	#%11000000
-		lsr	zp_tmp1
-		ror	A
-		lsr	zp_tmp1
-		ror	A
-		lsr	zp_tmp1
-		ror	A
-		ror	A
-		sta	sheila_SYSVIA_ora_nh
-		inc	sheila_SYSVIA_ora_nh
-
-		lda	#%11000000
+		lda	#%11010000
 		lsr	zp_tmp1
 		ror	A
 		lsr	zp_tmp1
@@ -158,9 +158,20 @@ uart_tx_char:	php
 		ror	A
 		ror	A
 		sta	sheila_SYSVIA_ora_nh
-		inc	sheila_SYSVIA_ora_nh
+		dec	sheila_SYSVIA_ora_nh
 
-		lda	#$7F				; ack char
+		lda	#%11010000
+		lsr	zp_tmp1
+		ror	A
+		lsr	zp_tmp1
+		ror	A
+		lsr	zp_tmp1
+		ror	A
+		ror	A
+		sta	sheila_SYSVIA_ora_nh
+		dec	sheila_SYSVIA_ora_nh
+
+		lda	#$0A				; ack char
 		sta	sheila_SYSVIA_ora_nh
 
 		lda	#$0B
