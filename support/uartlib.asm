@@ -159,7 +159,6 @@ SendWt:
 		nop 
 		nop 
 		nop
-		
 
 		lda	#$0A				; ack char
 		sta	sheila_SYSVIA_ora_nh

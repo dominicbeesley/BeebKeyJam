@@ -115,13 +115,12 @@ void scancore(void) {
 
 
         prev_1MHz = now_1MHz;
-        now_1MHz = gpio_get(GPIO_1MHZ_PIN);
+        pins = gpio_get_all();
+        now_1MHz = pins & (1 << GPIO_1MHZ_PIN);
 
 
         if (!prev_1MHz && now_1MHz) {
-            gpio_put(GPIO_TEST,true);
-            bool en = gpio_get(GPIO_KB_EN_PIN);
-            gpio_put(PICO_DEFAULT_LED_PIN, !en);
+            bool en = pins & (1 << GPIO_KB_EN_PIN);
             gpio_set_dir(GPIO_PA7_OUT_PIN, !en);        //only enable PA7 out when KB EN is low
             if (en) {
                 //keyboard scan enabled, run through the columns
@@ -135,7 +134,6 @@ void scancore(void) {
 
             } else {
 
-                pins = gpio_get_all();
                 col_ix = col_lk[(pins >> GPIO_PA3_IN_PIN) & 0xF];
                 row_ix = row_lk[(pins >> GPIO_PA6_IN_PIN) & 0x7];
 //                col_ix = (gpio_get(GPIO_PA0_IN_PIN)?1:0) |
@@ -190,8 +188,6 @@ void scancore(void) {
 //                }
 //                pa7_o |= keymatrix[row_ix] & (1 << col_ix);      
             }
-
-            gpio_put(GPIO_TEST,false);
         }
 
 
