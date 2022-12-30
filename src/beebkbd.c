@@ -48,20 +48,36 @@ Note: this build does no keyboard jamming but DOES:
 #define GPIO_PA7_OUT_PIN    22
 #define GPIO_PA7_IN_PIN     28
 
-#define GPIO_PA3_IN_PIN     6
+//row
 #define GPIO_PA4_IN_PIN     12
 #define GPIO_PA5_IN_PIN     11
 #define GPIO_PA6_IN_PIN     10
+
+//col
 #define GPIO_PA0_IN_PIN     9
 #define GPIO_PA1_IN_PIN     8
 #define GPIO_PA2_IN_PIN     7
+#define GPIO_PA3_IN_PIN     6
 
+// a lookup table to convert PA to col and ix
+const unsigned char col_lk[] = {
+    0x0, 0x8, 0x4, 0xC,
+    0x2, 0xA, 0x6, 0xE,
+    0x1, 0x9, 0x5, 0xD,
+    0x3, 0xB, 0x7, 0xF
+    };
+
+const unsigned char row_lk[] = {
+    0x0, 0x4, 0x2, 0x6,
+    0x1, 0x5, 0x3, 0x7
+    };
 
 //unused so far
 #define GPIO_LED1_PIN       3
 #define GPIO_LED2_PIN       2
 #define GPIO_LED3_PIN       5
 
+#define GPIO_TEST           18  
 
 
 #define SERIAL_BAUD (16000000/13/8/8)
@@ -93,6 +109,7 @@ void scancore(void) {
     static bool now_1MHz;
     static bool ca2_o = 0;
     static bool pa7_o = 0;
+    static uint32_t pins;
     while (1) 
     {     
 
@@ -102,6 +119,7 @@ void scancore(void) {
 
 
         if (!prev_1MHz && now_1MHz) {
+            gpio_put(GPIO_TEST,true);
             bool en = gpio_get(GPIO_KB_EN_PIN);
             gpio_put(PICO_DEFAULT_LED_PIN, !en);
             gpio_set_dir(GPIO_PA7_OUT_PIN, !en);        //only enable PA7 out when KB EN is low
@@ -116,13 +134,17 @@ void scancore(void) {
                 prev_prev_row_ix = -1;
 
             } else {
-                col_ix = (gpio_get(GPIO_PA0_IN_PIN)?1:0) |
-                         (gpio_get(GPIO_PA1_IN_PIN)?2:0) |
-                         (gpio_get(GPIO_PA2_IN_PIN)?4:0) |
-                         (gpio_get(GPIO_PA3_IN_PIN)?8:0);                
-                row_ix = (gpio_get(GPIO_PA4_IN_PIN)?1:0) |
-                         (gpio_get(GPIO_PA5_IN_PIN)?2:0) |
-                         (gpio_get(GPIO_PA6_IN_PIN)?4:0);
+
+                pins = gpio_get_all();
+                col_ix = col_lk[(pins >> GPIO_PA3_IN_PIN) & 0xF];
+                row_ix = row_lk[(pins >> GPIO_PA6_IN_PIN) & 0x7];
+//                col_ix = (gpio_get(GPIO_PA0_IN_PIN)?1:0) |
+//                         (gpio_get(GPIO_PA1_IN_PIN)?2:0) |
+//                         (gpio_get(GPIO_PA2_IN_PIN)?4:0) |
+//                         (gpio_get(GPIO_PA3_IN_PIN)?8:0);                
+//                row_ix = (gpio_get(GPIO_PA4_IN_PIN)?1:0) |
+//                         (gpio_get(GPIO_PA5_IN_PIN)?2:0) |
+//                         (gpio_get(GPIO_PA6_IN_PIN)?4:0);
 
                 pa7_o = false;
                 if (
@@ -169,6 +191,7 @@ void scancore(void) {
 //                pa7_o |= keymatrix[row_ix] & (1 << col_ix);      
             }
 
+            gpio_put(GPIO_TEST,false);
         }
 
 
@@ -177,19 +200,20 @@ void scancore(void) {
     }
 }
 
-void key_task()
+void keycore()
 {
-    if (txf != txf_ack) {
-        putchar_raw(tx_char);
-        putchar_raw('.');
-        txf_ack = txf;
-    }
+    while (1) {
+        if (txf != txf_ack) {
+            putchar_raw(tx_char);
+            txf_ack = txf;
+        }
 
-    if (rxf == rxf_ack) {
-        int x = getchar_timeout_us(0);
-        if (x != PICO_ERROR_TIMEOUT) {
-            rx_char = (unsigned char)x;
-            rxf = !rxf_ack;            
+        if (rxf == rxf_ack) {
+            int x = getchar_timeout_us(0);
+            if (x != PICO_ERROR_TIMEOUT) {
+                rx_char = (unsigned char)x;
+                rxf = !rxf_ack;            
+            }
         }
     }
 }
@@ -244,6 +268,11 @@ int main()
     gpio_init(GPIO_PA2_IN_PIN);
     gpio_set_pulls(GPIO_PA2_IN_PIN,0,1);
 
+    gpio_init(GPIO_TEST);
+    gpio_set_dir(GPIO_TEST,1);
+    gpio_put(GPIO_TEST,0);
+
+
     txf = false;
     txf_ack = false;
 
@@ -252,9 +281,7 @@ int main()
 
     multicore_launch_core1(scancore);
 
-    while (true) {
-        key_task();   
-    }
+    keycore();
 
     return 0;
 }
