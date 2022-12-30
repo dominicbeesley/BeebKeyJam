@@ -71,9 +71,8 @@ Note: this build does no keyboard jamming but DOES:
 // bit map of keys pressed, index is row (in beeb bit order!), bit # is column
 // a '1' indicates key is pressed                          
 volatile unsigned int keymatrix[8];
-volatile unsigned char tx_char;     // set in scancore
 
-volatile bool txf_part;             // set in scancore
+volatile unsigned char tx_char;     // set in scancore
 volatile bool txf;                  // set in scancore
 volatile bool txf_ack;              // set in key_task
 
@@ -84,12 +83,15 @@ volatile bool rxf_ack;              // set in scancore
 
 void scancore(void) {
     static unsigned char prev_col_ix = 0;
+    static unsigned char prev_row_ix = 0;
+    static unsigned char prev_prev_col_ix = 0;
+    static unsigned char prev_prev_row_ix = 0;
     static unsigned char col_ix = 0;
     static unsigned char row_ix = 0;
     static unsigned char col_load;
     static bool prev_1MHz;
     static bool now_1MHz;
-    static bool ca2_o;
+    static bool ca2_o = 0;
     static bool pa7_o = 0;
     while (1) 
     {     
@@ -98,7 +100,8 @@ void scancore(void) {
         prev_1MHz = now_1MHz;
         now_1MHz = gpio_get(GPIO_1MHZ_PIN);
 
-        if (prev_1MHz && !now_1MHz) {
+
+        if (!prev_1MHz && now_1MHz) {
             bool en = gpio_get(GPIO_KB_EN_PIN);
             gpio_put(PICO_DEFAULT_LED_PIN, !en);
             gpio_set_dir(GPIO_PA7_OUT_PIN, !en);        //only enable PA7 out when KB EN is low
@@ -108,6 +111,9 @@ void scancore(void) {
                 col_ix = col_ix & 0x0F;
 
                 prev_col_ix = -1;
+                prev_row_ix = -1;
+                prev_prev_col_ix = -1;
+                prev_prev_row_ix = -1;
 
             } else {
                 col_ix = (gpio_get(GPIO_PA0_IN_PIN)?1:0) |
@@ -118,18 +124,26 @@ void scancore(void) {
                          (gpio_get(GPIO_PA5_IN_PIN)?2:0) |
                          (gpio_get(GPIO_PA6_IN_PIN)?4:0);
 
-                if (prev_col_ix == 0xD && col_ix == 0xC) {
-                    txf_part = true;
-                    tx_char = (unsigned char)((tx_char >> 3) | (row_ix << 5));
-                }
-
-                if (txf_part && prev_col_ix == 0x0C && col_ix == 0xA && row_ix == 0x0) {
-                    txf = !txf_ack;
-                    txf_part = false;
-                }
-
-                if (prev_col_ix == 0xE && col_ix == 0xA && row_ix == 0x0) {
-                    rxf_ack = rxf;
+                pa7_o = false;
+                if (
+                       prev_col_ix == col_ix 
+                    && prev_row_ix == row_ix
+                    ) {
+                    if (col_ix == 0xC) {
+                        if (prev_prev_col_ix == 0xD) {
+                            tx_char = (unsigned char)((tx_char >> 3) | (row_ix << 5));
+                        }
+                    } else if (col_ix == 0xA && row_ix == 0x0) {
+                        if (prev_prev_col_ix == 0x0C) {
+                            txf = !txf_ack;
+                            pa7_o = true;
+                        } else if (prev_prev_col_ix == 0xE) {
+                            rxf_ack = rxf;
+                            pa7_o = true;
+                        }
+                    } 
+                    prev_prev_col_ix = col_ix;
+                    prev_prev_row_ix = row_ix;
                 }
 
                 if (col_ix == 0xE) {
@@ -139,27 +153,27 @@ void scancore(void) {
                         pa7_o = rxf != rxf_ack;
                     else if (row_ix == 6)
                         pa7_o = txf == txf_ack;
-                    else
-                        pa7_o = false;
-                }
+                } 
 
                 prev_col_ix = col_ix;
+                prev_row_ix = row_ix;
             }           
 
             if (col_ix <= 9) {
-                //do CA2
-                ca2_o = 0;
-                for (int i = 0; i < 8; i++) {
-                    ca2_o |= (keymatrix[i] & (1 << col_ix));
-                }
-                pa7_o = keymatrix[row_ix] & (1 << col_ix);      
+                pa7_o = false;
+//                //do CA2
+//                ca2_o = 0;
+//                for (int i = 0; i < 8; i++) {
+//                    ca2_o |= (keymatrix[i] & (1 << col_ix));
+//                }
+//                pa7_o |= keymatrix[row_ix] & (1 << col_ix);      
             }
 
         }
 
 
+        gpio_put(GPIO_PA7_OUT_PIN, pa7_o || (col_ix <= 9 && gpio_get(GPIO_PA7_IN_PIN)));
         gpio_put(GPIO_CA2_OUT_PIN, ca2_o || gpio_get(GPIO_CA2_IN_PIN));
-        gpio_put(GPIO_PA7_OUT_PIN, pa7_o || gpio_get(GPIO_PA7_IN_PIN));
     }
 }
 
@@ -167,6 +181,7 @@ void key_task()
 {
     if (txf != txf_ack) {
         putchar_raw(tx_char);
+        putchar_raw('.');
         txf_ack = txf;
     }
 
@@ -229,7 +244,6 @@ int main()
     gpio_init(GPIO_PA2_IN_PIN);
     gpio_set_pulls(GPIO_PA2_IN_PIN,0,1);
 
-    txf_part = false;
     txf = false;
     txf_ack = false;
 

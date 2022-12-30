@@ -15,22 +15,17 @@ start:		ldx	#<str_message
 main_loop:	jsr	uart_rx_char
 		bcs	@sk1
 		jsr	OSASCI
-@sk1:		ldx	#0
+@sk1:		ldx	#10
 		ldy	#0
 		lda	#OSBYTE_129_INKEY
 		jsr	OSBYTE
-		bcs	main_loop
-		txa
-		jsr	uart_tx_char
-		jmp	main_loop
+		jmp	start
 
-
-		rts
 
 
 
 		.RODATA
-str_message:	.byte 	"Type something...",13,10,0
+str_message:	.byte 	"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",13,10,0
 
 
 		.END
