@@ -35,46 +35,51 @@ uart_rx_char:	php
 		lda	sheila_SYSVIA_ora_nh
 		bpl	@sk
 
-	
+		lda	#0
+		sta	zp_tmp1
+
 		lda	#$0E
 		sta	sheila_SYSVIA_ora_nh
+		clc
+
 		lda	sheila_SYSVIA_ora_nh
-		rol	A
+		adc	#$90
 		ror	zp_tmp1
-		lda	#$1E
 		sta	sheila_SYSVIA_ora_nh
+
 		lda	sheila_SYSVIA_ora_nh
-		rol	A
+		adc	#$90
 		ror	zp_tmp1
-		lda	#$2E
 		sta	sheila_SYSVIA_ora_nh
+
 		lda	sheila_SYSVIA_ora_nh
-		rol	A
+		adc	#$90
 		ror	zp_tmp1
-		lda	#$3E
 		sta	sheila_SYSVIA_ora_nh
+
 		lda	sheila_SYSVIA_ora_nh
-		rol	A
+		adc	#$90
 		ror	zp_tmp1
-		lda	#$4E
 		sta	sheila_SYSVIA_ora_nh
+
+
 		lda	sheila_SYSVIA_ora_nh
-		rol	A
+		adc	#$90
 		ror	zp_tmp1
-		lda	#$5E
 		sta	sheila_SYSVIA_ora_nh
+
 		lda	sheila_SYSVIA_ora_nh
-		rol	A
+		adc	#$90
 		ror	zp_tmp1
-		lda	#$6E
 		sta	sheila_SYSVIA_ora_nh
+
 		lda	sheila_SYSVIA_ora_nh
-		rol	A
+		adc	#$90
 		ror	zp_tmp1
-		lda	#$7E
 		sta	sheila_SYSVIA_ora_nh
+
 		lda	sheila_SYSVIA_ora_nh
-		rol	A
+		rol 	A
 		ror	zp_tmp1
 
 
