@@ -1,0 +1,24 @@
+.define SYNC 17
+
+.program rgb_cap
+
+//    pull    block
+//
+//    out     Y,16
+//
+//vertloop:
+//    out     X,16
+//    mov     X,OSR
+//
+//    wait    0 gpio SYNC
+//    wait    1 gpio SYNC
+//horloop:                ; Loop for each pixel on a line
+    in pins, 2  [1]        ; Sample data
+//    jmp x-- horloop     ; Each iteration is 8 cycles
+//
+//    jmp y-- vertloop
+//
+
+
+
+
