@@ -65,16 +65,16 @@ void key_init() {
 void key_check(int ix, bool x) {
     uint8_t ox = keysdown[ix];
     if (x != ox) {
-        uint8_t ps2 = getps2(ix);
+        uint16_t ps2 = getps2(ix);
         printf("%d => %02X\n", ix, (int)ps2);
         if (ps2) {
             int r;
             if (ox) {
                 r = ps2c_keyup(ps2);
-                printf("F0%02X\n", ps2);
+                printf("F0%04X\n", ps2);
             } else {
                 r = ps2c_keydown(ps2);
-                printf("%02X\n", ps2);
+                printf("%04X\n", ps2);
             }
             if (r) {
                 printf("ERR %d\n", r);

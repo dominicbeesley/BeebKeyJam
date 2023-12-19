@@ -278,11 +278,17 @@ int ps2c_tick(void) {
 	return c;
 }
 
-int ps2c_keydown(uint8_t code) {
+int ps2c_keydown(uint16_t code) {
+	if (code & 0xFF00) {
+		write(code >> 8);
+	}
 	return write(code);
 
 }
-int ps2c_keyup(uint8_t code) {
+int ps2c_keyup(uint16_t code) {
+	if (code & 0xFF00) {
+		write(code >> 8);
+	}
 	int r = write(0xF0);
 	if (r) return r;
 	return write(code);

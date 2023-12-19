@@ -3,7 +3,7 @@
 
 // a maps of BBC scan codes to ps/2 make codes index is C + R * 10
 
-uint8_t ps2codes[81] = {
+uint16_t ps2codes[81] = {
  0x12 // 00 Left SHIFT
 ,0x14 // 01 LEFT/RIGHT CTRL (CTRL)
 ,0,0,0,0,0,0,0,0 // config switches - ignored
@@ -17,7 +17,7 @@ uint8_t ps2codes[81] = {
 ,0x83 // 16 F7
 ,0x4E // 17 -
 ,0x55 // 18 = (^)
-,0x6B // 19 LEFT
+,0xE06B // 19 LEFT
 
 ,0x09 // 20 F10 (F0)
 ,0x1D // 21 W
@@ -28,7 +28,7 @@ uint8_t ps2codes[81] = {
 ,0x46 // 26 9
 ,0x45 // 27 0
 ,0x5D // 28 # (_)
-,0x72 // 29 DOWN
+,0xE072 // 29 DOWN
 
 ,0x16 // 30 1
 ,0x1E // 31 2
@@ -39,7 +39,7 @@ uint8_t ps2codes[81] = {
 ,0x44 // 36 O
 ,0x4D // 37 P
 ,0x54 // 38 [
-,0x75 // 39 UP
+,0xE075 // 39 UP
 
 ,0x58 // 40 CAPS LOCK
 ,0x1C // 41 A
@@ -83,13 +83,13 @@ uint8_t ps2codes[81] = {
 ,0x0A // 76 F8
 ,0x01 // 77 F9
 ,0x61 // 78 backslash 
-,0x74 // 79 RIGHT
+,0xE074 // 79 RIGHT
 
 ,0x07 // xx BREAK - handled separately in top level
 };
 
 
-uint8_t getps2(uint8_t x) {
+uint16_t getps2(uint8_t x) {
 	if (x <= sizeof(ps2codes)/sizeof(ps2codes[0])) {
 		return ps2codes[x];
 	} else {
