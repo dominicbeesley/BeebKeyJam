@@ -7,16 +7,17 @@
 #include "ps2keys.h"
 #include "ps2comm.h"
 
-//Note: in/out sense is reversed cf BeebKeyJam
-#define GPIO_RELAY_PIN      17
-#define GPIO_RST_PIN        15
 
-#define GPIO_CA2_OUT_PIN    16
+
+//PS2 keyboard
+//PA7-out on KeyJam
+#define GPIO_PS2KB_DAT_PIN  22
+//CA2-out on KeyJam
+#define GPIO_PS2KB_CLK_PIN  16
+
 #define GPIO_CA2_IN_PIN     4
 #define GPIO_KB_EN_PIN      13
 #define GPIO_1MHZ_PIN       14
-
-#define GPIO_PA7_OUT_PIN    22
 #define GPIO_PA7_IN_PIN     28
 
 #define GPIO_PA3_IN_PIN     6
@@ -32,6 +33,11 @@
 #define GPIO_LED3_PIN       5
 
 #define GPIO_RST_IN_SPEC    21
+
+//Keyjam board unusused
+#define GPIO_RELAY_PIN      17
+#define GPIO_RST_PIN        15
+
 
 //the set row, set col functions assume 1MHzE is low on entry
 void key_setrow(uint8_t r) {
@@ -151,11 +157,20 @@ int main()
     gpio_init(GPIO_RST_IN_SPEC);
     gpio_set_pulls(GPIO_RST_IN_SPEC, 1, 0);
 
+
+    //extras to for KeyJam board
+    gpio_init(GPIO_RELAY_PIN);
+    gpio_set_dir(GPIO_RELAY_PIN, GPIO_OUT);
+    gpio_put(GPIO_RELAY_PIN,0);
+    gpio_init(GPIO_RST_PIN);
+    gpio_set_dir(GPIO_RST_PIN, GPIO_OUT);
+    gpio_put(GPIO_RST_PIN,0);
+
     puts("init...");
 
     key_init();
 
-    ps2c_init(GPIO_CA2_OUT_PIN, GPIO_PA7_OUT_PIN);
+    ps2c_init(GPIO_PS2KB_CLK_PIN, GPIO_PS2KB_DAT_PIN);
 
     while (true) {
         sleep_ms(1);
